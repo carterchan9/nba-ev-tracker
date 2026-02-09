@@ -50,6 +50,8 @@ All project documentation is in the `info/` directory:
 - **Session history:** [`info/SESSIONS.md`](info/SESSIONS.md) — Running log of development sessions
 - **Architecture:** [`info/OUTLINE.md`](info/OUTLINE.md) — High-level overview
 - **Technical notes:** [`info/NOTES.md`](info/NOTES.md) — Implementation details and gotchas
+- **Terminal guide:** [`info/TERMINAL_GUIDE.md`](info/TERMINAL_GUIDE.md) — Learn command line basics
+- **Git workflow:** [`info/GIT_WORKFLOW.md`](info/GIT_WORKFLOW.md) — Feature branch best practices
 
 ## Prerequisites
 

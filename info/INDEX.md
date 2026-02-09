@@ -64,6 +64,35 @@ This directory contains all project documentation organized for easy navigation.
 
 ---
 
+### **GIT_WORKFLOW.md** — Development Workflow
+*Git best practices and branch strategy*
+
+- Feature branch workflow (mandatory)
+- Branch naming conventions
+- Commit message format
+- Quick reference commands
+- Example session workflow
+
+**When to reference:** Before committing any changes
+
+---
+
+### **TERMINAL_GUIDE.md** — Command Line Reference
+*Beginner-friendly guide to terminal concepts*
+
+- Navigation basics (cd, ls, pwd)
+- File operations (cat, touch, mkdir, rm)
+- Searching (grep, find)
+- Python and database commands
+- Git command reference
+- Process management
+- Common flags and operators
+- Pro tips and shortcuts
+
+**When to reference:** Learning terminal commands, understanding what I'm doing
+
+---
+
 ## 🔄 Recommended Workflow
 
 ### Starting a New Session
@@ -90,6 +119,9 @@ This directory contains all project documentation organized for easy navigation.
 | Find technical details/gotchas | NOTES.md |
 | Plan my next session | STATUS.md → Action Items |
 | Learn from past mistakes | SESSIONS.md → Lessons Learned |
+| Commit changes to GitHub | GIT_WORKFLOW.md |
+| Learn terminal commands | TERMINAL_GUIDE.md |
+| Understand what Claude is doing | TERMINAL_GUIDE.md |
 
 ---
 
