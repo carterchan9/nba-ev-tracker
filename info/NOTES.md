@@ -1,8 +1,8 @@
-# Conversation Context & Project Notes
+# Technical Notes & Implementation Details
 
-## Project Status
-- **Phase:** Feature-complete, runtime-tested
-- **Last updated:** 2026-02-07
+> **See also:** STATUS.md (current state), OUTLINE.md (architecture), SESSIONS.md (history)
+
+This file contains technical implementation details, design decisions, runtime information, and gotchas.
 
 ## What's Been Done
 1. Full project scaffolded with 8 source modules + CLI entry point
@@ -27,6 +27,59 @@
 20. Commence time formatted as "February 7, 2026, 7:30pm"
 21. Game detail view — select a game to see all available odds from every sportsbook
 22. `sys.path` fix in dashboard for Streamlit direct execution
+
+## Latest Changes (2026-02-09)
+
+### Dashboard Improvements
+1. **Best book display with multi-book counting:**
+   - Dashboard now shows only the best book (highest EV) per market
+   - Added `num_positive_ev_books` column showing how many books have +EV for that market
+   - Click-to-expand feature: select a market to view all competing book prices
+
+2. **Line matching transparency:**
+   - Added `pinnacle_point` column to verify benchmark comparison uses same line
+   - Display shows both sportsbook point and Pinnacle point side-by-side
+   - Confirms comparisons only happen at matching totals (e.g., 20.5 vs 20.5)
+
+3. **Separate historical/live tables:**
+   - Created `ev_opportunities_live` table (cleared on each scan)
+   - Keeps `ev_opportunities` for full historical record
+   - Live page shows only current scan, Historical page retains all past data
+   - No more old data appearing after refresh
+
+4. **Pinnacle preference for all markets:**
+   - Changed benchmark logic to prefer Pinnacle for ALL markets (including props)
+   - Previously only used Pinnacle for game markets, consensus for props
+   - Now: Pinnacle first if available, consensus fallback
+
+### Regional Support (In Progress - Needs Verification)
+5. **Multi-region API pulling:**
+   - Updated `ODDS_API_REGIONS` from `us,us2,uk,eu,au` to `ca,us,us2,uk,eu,au`
+   - Added `PREFERRED_REGION` config (default: `ca` for Ontario)
+   - Added `region` column to `odds_snapshots` and `pinnacle_odds` tables
+   - Database function `get_live_ev_opportunities_by_region()` created (not yet active)
+
+### Database Schema Updates
+- `ev_opportunities` + `ev_opportunities_live`: added `pinnacle_point` column
+- `odds_snapshots`: added `region` column (default 'us')
+- `pinnacle_odds`: added `region` column (default 'us')
+
+### Critical Issues Discovered
+1. **API quota exhausted:** Used 499/500 monthly requests (only 1 remaining)
+2. **Odds accuracy issue:** betriver.ca odds don't match API data
+   - User sees -107 on betriver.ca, API returns +114 (2.14 decimal)
+   - Likely cause: "ca" region might not be valid, or "betrivers" key is US-only
+3. **Regional implementation incomplete:**
+   - Added "ca" to regions WITHOUT verifying it's a valid Odds API region code
+   - Risk: Next scan might fail or return wrong data if "ca" unrecognized
+   - Need to check API docs for correct Canadian region/sportsbook keys
+
+### Action Items Before Next Scan
+- [ ] Verify "ca" is valid Odds API region code
+- [ ] Find correct sportsbook key for betriver.ca (might not be "betrivers")
+- [ ] Check if Canadian sportsbooks are even supported by The Odds API
+- [ ] Test with 1 request first before wasting quota
+- [ ] Document actual Canadian sportsbook keys if available
 
 ## Runtime Test Results (2026-02-07)
 - `python main.py init` — schema created successfully
@@ -70,7 +123,9 @@
 
 ## Configuration
 - **API:** The Odds API v4 (key in `.env`)
-- **API regions:** `us,us2,uk,eu,au` (defined in `config.py` as `ODDS_API_REGIONS`)
+- **API regions:** `ca,us,us2,uk,eu,au` (defined in `config.py` as `ODDS_API_REGIONS`)
+  - ⚠️ "ca" not yet verified as valid region code
+- **Preferred region:** `ca` (Ontario) - set in `.env` as `PREFERRED_REGION`
 - **DB:** PostgreSQL `nba_ev_tracker` on localhost (credentials in `.env`)
 - **Poll interval:** 15 minutes
 - **Min EV threshold:** 1.0% (for live scanner)
@@ -113,10 +168,10 @@
 - [x] Commence time formatted nicely
 - [x] Game detail view (all markets for a selected game)
 - [x] Verified sportsbook availability — bet365 not available via The Odds API
+- [x] Git repo created + pushed to GitHub (public): https://github.com/carterchan9/nba-ev-tracker
 - [ ] Consider Kelly criterion sizing in `ev_calculation.py`
 - [ ] Consider Slack/email alert backend
 - [ ] Multi-league extension (NHL, MLB, etc.)
-- [ ] Git init + first commit
 - [ ] Consider alternative bet365 data source (SportsGameOdds free tier)
 
 ## File Quick Reference

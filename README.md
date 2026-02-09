@@ -20,11 +20,11 @@ A positive Expected Value (EV) betting tool for the NBA. Compares sportsbook odd
 bettingTool/
 ├── main.py                         # CLI entry point
 ├── requirements.txt
-├── .env.example                    # Copy to .env and fill in
+├── .env                            # Configuration (copy from .env.example)
+├── README.md                       # This file (setup & usage)
 ├── sql/
 │   └── schema.sql                  # PostgreSQL schema
 ├── src/
-│   ├── __init__.py
 │   ├── config.py                   # Central configuration
 │   ├── data_fetching.py            # Odds API + scores
 │   ├── ev_calculation.py           # EV, edge, CLV, scanner
@@ -33,9 +33,23 @@ bettingTool/
 │   ├── visualization_dashboard.py  # Streamlit dashboard
 │   ├── scheduler.py                # APScheduler jobs
 │   └── alerts.py                   # Alert system
-└── info/
-    └── outline.md
+└── info/                           # 📚 Project documentation
+    ├── INDEX.md                    # Documentation guide (start here)
+    ├── STATUS.md                   # Current project status
+    ├── SESSIONS.md                 # Development session history
+    ├── OUTLINE.md                  # Architecture overview
+    └── NOTES.md                    # Technical details & gotchas
 ```
+
+## 📚 Documentation
+
+All project documentation is in the `info/` directory:
+
+- **Start here:** [`info/INDEX.md`](info/INDEX.md) — Guide to the documentation
+- **Current status:** [`info/STATUS.md`](info/STATUS.md) — What's working, what's not, action items
+- **Session history:** [`info/SESSIONS.md`](info/SESSIONS.md) — Running log of development sessions
+- **Architecture:** [`info/OUTLINE.md`](info/OUTLINE.md) — High-level overview
+- **Technical notes:** [`info/NOTES.md`](info/NOTES.md) — Implementation details and gotchas
 
 ## Prerequisites
 
@@ -58,7 +72,7 @@ pip install -r requirements.txt
 
 # 4. Configure environment — create a .env file with:
 #    ODDS_API_KEY, DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
-#    See info/context.md for all config values
+#    See info/STATUS.md or info/NOTES.md for all config values
 
 # 5. Create the database
 createdb nba_ev_tracker   # or via psql: CREATE DATABASE nba_ev_tracker;

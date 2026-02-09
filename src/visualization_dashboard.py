@@ -32,7 +32,7 @@ import streamlit as st
 
 import numpy as np
 
-from src.config import MIN_EV_THRESHOLD, STARTING_BANKROLL
+from src.config import MIN_EV_THRESHOLD, STARTING_BANKROLL, PREFERRED_REGION
 
 
 def decimal_to_american(dec: float) -> str:
@@ -52,14 +52,30 @@ def format_commence_time(ts) -> str:
     return t.strftime("%B %-d, %Y, %-I:%M%p").replace("AM", "am").replace("PM", "pm")
 
 
-def _prepare_ev_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Common prep for EV opportunity DataFrames: dedup, American odds, date format, benchmark."""
+def _prepare_ev_df(df: pd.DataFrame, keep_best_book_only: bool = False) -> pd.DataFrame:
+    """
+    Common prep for EV opportunity DataFrames: dedup, American odds, date format, benchmark.
+
+    If keep_best_book_only=True, keeps only the best book (highest EV) for each unique
+    market/selection/point combination, and adds num_positive_ev_books column.
+    """
     # Deduplicate: keep only the latest entry per unique bet
     dedup_cols = ["game_id", "sportsbook", "market_type", "selection", "point", "player_name"]
     dedup_available = [c for c in dedup_cols if c in df.columns]
     df = df.sort_values("found_at", ascending=False).drop_duplicates(
         subset=dedup_available, keep="first"
     )
+
+    # If requested, keep only best book per market/selection/point and add book count
+    if keep_best_book_only:
+        # Count how many books have positive EV for each market/selection/point combo
+        group_cols = [c for c in ["game_id", "market_type", "player_name", "selection", "point"] if c in df.columns]
+        df["num_positive_ev_books"] = df.groupby(group_cols)["ev_percent"].transform("count")
+        # Keep only the best book (highest EV) for each combo
+        df = df.sort_values("ev_percent", ascending=False).drop_duplicates(
+            subset=group_cols, keep="first"
+        )
+
     # American odds
     df["book_american"] = df["book_odds"].apply(decimal_to_american)
     df["benchmark_american"] = df["pinnacle_odds"].apply(decimal_to_american)
@@ -78,7 +94,7 @@ from src.database import (
     get_all_latest_odds_for_game,
     get_ev_opportunities_by_date,
     get_last_scan_time,
-    get_recent_ev_opportunities,
+    get_live_ev_opportunities,
     get_upcoming_games,
     init_schema,
 )
@@ -137,9 +153,9 @@ st.sidebar.markdown(
 
 _DISPLAY_COLS = [
     "home_team", "away_team", "commence_time",
-    "sportsbook", "market_type", "player_name", "selection",
-    "book_odds", "book_american", "pinnacle_odds", "benchmark_american",
-    "ev_percent", "edge_percent", "benchmark",
+    "market_type", "player_name", "selection", "point", "pinnacle_point",
+    "sportsbook", "book_odds", "book_american", "pinnacle_odds", "benchmark_american",
+    "ev_percent", "edge_percent", "num_positive_ev_books", "benchmark",
 ]
 
 
@@ -164,30 +180,82 @@ if page == "Live EV Opportunities":
             st.success(f"Found {len(new_opps)} opportunities.")
             st.rerun()
 
-    # Load recent opportunities — only from latest scan
-    opps = get_recent_ev_opportunities(hours=1)
+    # Load live opportunities (most recent scan only)
+    opps = get_live_ev_opportunities()
 
     if opps:
         df = pd.DataFrame(opps)
-        # Keep only entries from the most recent scan batch
-        if "found_at" in df.columns and not df.empty:
-            latest_time = df["found_at"].max()
-            df = df[df["found_at"] >= latest_time - pd.Timedelta(minutes=2)]
 
-        df = _prepare_ev_df(df)
+        # Keep raw data before dedup for expansion view
+        df_raw = df.copy()
+
+        # Prepare display df: keep only best book per market/selection/point
+        df = _prepare_ev_df(df, keep_best_book_only=True)
         available = [c for c in _DISPLAY_COLS if c in df.columns]
+
+        st.markdown("### Best Book per Market (with Positive EV Book Count)")
         st.dataframe(
             df[available].sort_values("ev_percent", ascending=False),
             use_container_width=True,
             hide_index=True,
         )
 
+        # --- Expandable view: all books for a selected market ---
+        st.markdown("---")
+        st.subheader("View All Books for a Market")
+
+        # Build unique market combinations
+        market_options = []
+        market_map = {}
+        for _, row in df.iterrows():
+            game_label = f"{row.get('away_team', '?')} @ {row.get('home_team', '?')} ({row.get('commence_time', '')})"
+            market_key = (row["game_id"], row["market_type"], row.get("player_name", ""),
+                         row["selection"], row.get("point"))
+            point_str = f" ({row['point']})" if pd.notna(row["point"]) else ""
+            market_label = f"{game_label} — {row['market_type']} {row.get('player_name', '')} {row['selection']}{point_str}".replace("  ", " ")
+            market_options.append(market_label)
+            market_map[market_label] = market_key
+
+        if market_options:
+            selected_market_label = st.selectbox(
+                "Select a market to view all book prices:",
+                market_options,
+                key="market_selector"
+            )
+            game_id, market_type, player_name, selection, point = market_map[selected_market_label]
+
+            # Filter raw data for this market
+            books_df = df_raw[
+                (df_raw["game_id"] == game_id) &
+                (df_raw["market_type"] == market_type) &
+                ((df_raw["player_name"] == player_name) | (df_raw["player_name"].isna() & (player_name == ""))) &
+                (df_raw["selection"] == selection)
+            ].copy()
+            # Also filter by point (handle NaN values)
+            if pd.notna(point):
+                books_df = books_df[books_df["point"] == point]
+            else:
+                books_df = books_df[books_df["point"].isna()]
+
+            if not books_df.empty:
+                books_df = _prepare_ev_df(books_df, keep_best_book_only=False)
+                books_cols = ["sportsbook", "book_odds", "book_american", "pinnacle_odds",
+                             "benchmark_american", "ev_percent", "edge_percent", "benchmark"]
+                books_available = [c for c in books_cols if c in books_df.columns]
+                st.dataframe(
+                    books_df[books_available].sort_values("ev_percent", ascending=False),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info("No books found for this market.")
+
         # --- Game detail view ---
         st.markdown("---")
         st.subheader("Game Detail — All Available Markets")
 
         game_labels = {}
-        for _, row in df.drop_duplicates(subset=["game_id"]).iterrows():
+        for _, row in df_raw.drop_duplicates(subset=["game_id"]).iterrows():
             label = f"{row.get('away_team', '?')} @ {row.get('home_team', '?')} ({row.get('commence_time', '')})"
             game_labels[label] = row["game_id"]
 

@@ -344,28 +344,107 @@ def insert_ev_opportunity(
     ev_percent: float,
     edge_percent: float,
     point: float | None = None,
+    pinnacle_point: float | None = None,
     player_name: str | None = None,
     benchmark: str = "pinnacle",
 ) -> int:
     """Insert a positive-EV opportunity; returns the new row id."""
     sql = """
         INSERT INTO ev_opportunities
-            (game_id, sportsbook, market_type, selection, point,
+            (game_id, sportsbook, market_type, selection, point, pinnacle_point,
              player_name, book_odds, pinnacle_odds, ev_percent, edge_percent,
              benchmark)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id;
     """
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 sql,
-                (game_id, sportsbook, market_type, selection, point,
+                (game_id, sportsbook, market_type, selection, point, pinnacle_point,
                  player_name, book_odds, pinnacle_odds, ev_percent, edge_percent,
                  benchmark),
             )
             row_id: int = cur.fetchone()[0]
     return row_id
+
+
+def clear_live_ev_opportunities() -> None:
+    """Clear all live EV opportunities (in preparation for a fresh scan)."""
+    sql = "DELETE FROM ev_opportunities_live;"
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+    logger.info("Cleared live EV opportunities table.")
+
+
+def insert_ev_opportunity_live(
+    game_id: str,
+    sportsbook: str,
+    market_type: str,
+    selection: str,
+    book_odds: float,
+    pinnacle_odds: float,
+    ev_percent: float,
+    edge_percent: float,
+    point: float | None = None,
+    pinnacle_point: float | None = None,
+    player_name: str | None = None,
+    benchmark: str = "pinnacle",
+) -> int:
+    """Insert a positive-EV opportunity into the live table; returns the new row id."""
+    sql = """
+        INSERT INTO ev_opportunities_live
+            (game_id, sportsbook, market_type, selection, point, pinnacle_point,
+             player_name, book_odds, pinnacle_odds, ev_percent, edge_percent,
+             benchmark)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id;
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql,
+                (game_id, sportsbook, market_type, selection, point, pinnacle_point,
+                 player_name, book_odds, pinnacle_odds, ev_percent, edge_percent,
+                 benchmark),
+            )
+            row_id: int = cur.fetchone()[0]
+    return row_id
+
+
+def get_live_ev_opportunities() -> list[dict[str, Any]]:
+    """Get EV opportunities from the live table (most recent scan only)."""
+    sql = """
+        SELECT eo.*, g.home_team, g.away_team, g.commence_time
+        FROM ev_opportunities_live eo
+        JOIN games g ON g.game_id = eo.game_id
+        ORDER BY eo.ev_percent DESC;
+    """
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql)
+            return [dict(r) for r in cur.fetchall()]
+
+
+def get_live_ev_opportunities_by_region(preferred_region: str = "ca") -> list[dict[str, Any]]:
+    """
+    Get EV opportunities from the live table, prioritizing a specific region.
+    Falls back to other regions if preferred region has no odds for that bet.
+    """
+    sql = """
+        SELECT eo.*, g.home_team, g.away_team, g.commence_time
+        FROM ev_opportunities_live eo
+        JOIN games g ON g.game_id = eo.game_id
+        WHERE eo.sportsbook IN (
+            SELECT DISTINCT sportsbook FROM odds_snapshots WHERE region = %s
+        )
+        ORDER BY eo.ev_percent DESC;
+    """
+    with get_connection() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, (preferred_region,))
+            return [dict(r) for r in cur.fetchall()]
 
 
 def get_recent_ev_opportunities(hours: int = 24) -> list[dict[str, Any]]:

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS odds_snapshots (
     id              BIGSERIAL PRIMARY KEY,
     game_id         TEXT NOT NULL REFERENCES games(game_id),
     sportsbook      TEXT NOT NULL,
+    region          TEXT NOT NULL DEFAULT 'us',  -- ca (Canada), us, us2, uk, eu, au
     market_type     TEXT NOT NULL,              -- h2h | spreads | totals | player_points | etc.
     selection       TEXT NOT NULL,              -- team name, Over/Under, etc.
     point           REAL,                       -- spread / total / prop line (NULL for h2h)
@@ -38,6 +39,7 @@ CREATE INDEX IF NOT EXISTS idx_odds_time ON odds_snapshots(snapshot_time);
 CREATE TABLE IF NOT EXISTS pinnacle_odds (
     id              BIGSERIAL PRIMARY KEY,
     game_id         TEXT NOT NULL REFERENCES games(game_id),
+    region          TEXT NOT NULL DEFAULT 'us',  -- ca (Canada), us, us2, uk, eu, au
     market_type     TEXT NOT NULL,
     selection       TEXT NOT NULL,
     point           REAL,
@@ -51,14 +53,15 @@ CREATE TABLE IF NOT EXISTS pinnacle_odds (
 CREATE INDEX IF NOT EXISTS idx_pin_game ON pinnacle_odds(game_id);
 CREATE INDEX IF NOT EXISTS idx_pin_closing ON pinnacle_odds(is_closing);
 
--- Positive-EV opportunities found by the scanner
+-- Positive-EV opportunities found by the scanner (full historical record)
 CREATE TABLE IF NOT EXISTS ev_opportunities (
     id              BIGSERIAL PRIMARY KEY,
     game_id         TEXT NOT NULL REFERENCES games(game_id),
     sportsbook      TEXT NOT NULL,
     market_type     TEXT NOT NULL,
     selection       TEXT NOT NULL,
-    point           REAL,
+    point           REAL,                       -- sportsbook line
+    pinnacle_point  REAL,                       -- pinnacle line (should match point if benchmark=pinnacle)
     player_name     TEXT,                       -- player name for props (NULL for game markets)
     book_odds       REAL NOT NULL,
     pinnacle_odds   REAL NOT NULL,
@@ -70,6 +73,27 @@ CREATE TABLE IF NOT EXISTS ev_opportunities (
 
 CREATE INDEX IF NOT EXISTS idx_ev_game ON ev_opportunities(game_id);
 CREATE INDEX IF NOT EXISTS idx_ev_found ON ev_opportunities(found_at);
+
+-- Live opportunities table (only most recent scan, cleared on each refresh)
+CREATE TABLE IF NOT EXISTS ev_opportunities_live (
+    id              BIGSERIAL PRIMARY KEY,
+    game_id         TEXT NOT NULL REFERENCES games(game_id),
+    sportsbook      TEXT NOT NULL,
+    market_type     TEXT NOT NULL,
+    selection       TEXT NOT NULL,
+    point           REAL,                       -- sportsbook line
+    pinnacle_point  REAL,                       -- pinnacle line (should match point if benchmark=pinnacle)
+    player_name     TEXT,                       -- player name for props (NULL for game markets)
+    book_odds       REAL NOT NULL,
+    pinnacle_odds   REAL NOT NULL,
+    ev_percent      REAL NOT NULL,
+    edge_percent    REAL NOT NULL,
+    benchmark       TEXT NOT NULL DEFAULT 'pinnacle',  -- pinnacle | consensus
+    found_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ev_live_game ON ev_opportunities_live(game_id);
+CREATE INDEX IF NOT EXISTS idx_ev_live_found ON ev_opportunities_live(found_at);
 
 -- User-placed bets
 CREATE TABLE IF NOT EXISTS user_bets (

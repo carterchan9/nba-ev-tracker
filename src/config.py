@@ -23,8 +23,12 @@ ODDS_API_KEY: str = os.getenv("ODDS_API_KEY", "")
 ODDS_API_BASE_URL: str = "https://api.the-odds-api.com/v4"
 SPORT_KEY: str = "basketball_nba"
 
-# API regions — us,us2 covers North American books; uk,eu,au for Pinnacle + international
-ODDS_API_REGIONS: str = "us,us2,uk,eu,au"
+# API regions — pull from all regions to get comprehensive coverage
+# ca: Canada (Ontario), us/us2: USA, uk/eu/au: International (Pinnacle)
+ODDS_API_REGIONS: str = "ca,us,us2,uk,eu,au"
+
+# Preferred region for display (user can override in .env)
+PREFERRED_REGION: str = os.getenv("PREFERRED_REGION", "ca")
 
 # Sportsbook keys as used by The Odds API
 SPORTSBOOKS: list[str] = [

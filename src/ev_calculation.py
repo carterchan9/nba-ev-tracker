@@ -15,12 +15,14 @@ import statistics
 
 from src.config import MIN_EV_THRESHOLD, PINNACLE_KEY, PROP_MARKETS, SPORTSBOOKS
 from src.database import (
+    clear_live_ev_opportunities,
     get_closing_pinnacle_odds,
     get_latest_odds,
     get_latest_pinnacle_odds,
     get_pending_bets,
     get_upcoming_games,
     insert_ev_opportunity,
+    insert_ev_opportunity_live,
     settle_bet,
 )
 
@@ -292,10 +294,12 @@ def scan_ev_opportunities_for_game(
         lookup_key = (mtype, selection, point, player_name)
         is_prop = mtype in PROP_MARKETS
 
-        # Choose benchmark: Pinnacle for game markets, consensus for props
-        if not is_prop and lookup_key in pin_lookup:
+        # Choose benchmark: Pinnacle if available (for any market), else consensus
+        pinnacle_point = None
+        if lookup_key in pin_lookup:
             bench_row = pin_lookup[lookup_key]
             bench_dec = bench_row["odds_decimal"]
+            pinnacle_point = bench_row.get("point")
             bench_label = "pinnacle"
 
             # No-vig fair prob from Pinnacle two-way market
@@ -312,6 +316,7 @@ def scan_ev_opportunities_for_game(
         elif lookup_key in consensus_lookup:
             bench_row = consensus_lookup[lookup_key]
             bench_dec = bench_row["odds_decimal"]
+            pinnacle_point = bench_row.get("point")
             bench_label = "consensus"
 
             # No-vig fair prob from consensus two-way market
@@ -357,6 +362,22 @@ def scan_ev_opportunities_for_game(
                 ev_percent=round(ev_pct, 2),
                 edge_percent=round(edge_pct, 2),
                 point=point,
+                pinnacle_point=pinnacle_point,
+                player_name=player_name,
+                benchmark=bench_label,
+            )
+            # Also insert into live opportunities table
+            insert_ev_opportunity_live(
+                game_id=game_id,
+                sportsbook=book_key,
+                market_type=mtype,
+                selection=selection,
+                book_odds=book_dec,
+                pinnacle_odds=bench_dec,
+                ev_percent=round(ev_pct, 2),
+                edge_percent=round(edge_pct, 2),
+                point=point,
+                pinnacle_point=pinnacle_point,
                 player_name=player_name,
                 benchmark=bench_label,
             )
@@ -368,11 +389,16 @@ def scan_all_upcoming() -> list[dict[str, Any]]:
     """
     Scan every upcoming game and return all positive-EV opportunities.
 
+    Clears the live opportunities table before inserting new ones.
+
     Returns
     -------
     list[dict]
         Combined list of opportunities across all upcoming games.
     """
+    # Clear live opportunities table (in preparation for fresh scan)
+    clear_live_ev_opportunities()
+
     games = get_upcoming_games()
     all_opps: list[dict[str, Any]] = []
     for game in games:
